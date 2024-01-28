@@ -43,7 +43,7 @@ clean:
 rebuild: clean all
 
 name:
-NAME = $(shell read);
+NAME = $(stdout);
 
 push:
 	git add s21_matrix.c s21_matrix.h all_test.c Makefile
