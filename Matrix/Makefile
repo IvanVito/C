@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Werror -Wextra -std=c11
 OS = $(shell uname)
-
+NAME = $(shell date)
 
 ifeq ($(OS),Linux)
     det_OS = -lcheck -lrt -lpthread -lsubunit -lm
@@ -41,9 +41,6 @@ clean:
 	rm -rf report *.gc* *.o *.info *.a test.dSYM test s21_matrix.dSYM s21_matrix
 
 rebuild: clean all
-
-name:
-NAME = $(stdout);
 
 push:
 	git add s21_matrix.c s21_matrix.h all_test.c Makefile
