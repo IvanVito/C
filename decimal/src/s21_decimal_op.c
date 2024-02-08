@@ -13,20 +13,20 @@
 // Bitwise get/set methods
 
 // Gets bit from specified index
-uint32_t s21_bit_get(uint32_t *bits, size_t index) {
-  uint32_t bit_mask = (uint32_t)1 << (index % INT_BITSIZE);
-  return bits[index / INT_BITSIZE] & bit_mask ? 1 : 0;
+uint32_t s21_bit_get(const uint32_t *bits, size_t index) {
+  uint32_t bit_mask = 1U << (index % INT_BITSIZE);
+  return (bits[index / INT_BITSIZE] & bit_mask) ? 1U : 0U;
 }
 
 // Sets bit at specified index
 void s21_bit_set(uint32_t *bits, size_t index, uint32_t value) {
-  bits[index / INT_BITSIZE] &= ~((uint32_t)1 << (index % INT_BITSIZE));
+  bits[index / INT_BITSIZE] &= ~(1U << (index % INT_BITSIZE));
   bits[index / INT_BITSIZE] |= (value ? 1 : 0) << (index % INT_BITSIZE);
 }
 
 // Flips bit at specified index
 void s21_bit_flip(uint32_t *bits, size_t index) {
-  bits[index / INT_BITSIZE] ^= (uint32_t)1 << (index % INT_BITSIZE);
+  bits[index / INT_BITSIZE] ^= 1U << (index % INT_BITSIZE);
 }
 
 // Sets bit range with given value
@@ -36,7 +36,7 @@ void s21_bit_range_set(uint32_t *bits, size_t index, size_t bitsize,
 }
 
 // Gets binary value from specified index with specified bitsize
-uint32_t s21_word_get(uint32_t *bits, size_t index, size_t bitsize) {
+uint32_t s21_word_get(const uint32_t *bits, size_t index, size_t bitsize) {
   uint32_t result = bits[index / INT_BITSIZE] >> (index % INT_BITSIZE);
   result &= 0xFFFFFFFF >> (INT_BITSIZE - bitsize);
   return result;
@@ -70,6 +70,13 @@ uint32_t s21_decimal_exp_get(s21_decimal *num) {
 
 void s21_decimal_exp_set(s21_decimal *num, uint32_t value) {
   s21_word_set(num->bits, 112U, 8U, value);
+}
+
+int s21_decimal_cmp(s21_decimal value_1, s21_decimal value_2) {
+  s21_bcd bcd_1 = {0}, bcd_2 = {0};
+  s21_dec2bcd(&value_1, &bcd_1);
+  s21_dec2bcd(&value_2, &bcd_2);
+  return s21_bcd_cmp(&bcd_1, &bcd_2);
 }
 
 // BCD operations
@@ -116,12 +123,133 @@ uint32_t s21_bcd_num_rshift(s21_bcd *bcd_num) {
   return underflow;
 }
 
+void s21_bcd_mul10(s21_bcd *bcd_num) {
+  s21_bcd_shrink(bcd_num);
+  uint32_t exp = s21_bcd_exp_get(bcd_num);
+  if (exp != 0)
+    s21_bcd_exp_set(bcd_num, exp - 1);
+  else
+    s21_bcd_num_lshift(bcd_num);
+}
+
+void s21_bcd_div10(s21_bcd *bcd_num) {
+  s21_bcd_shrink(bcd_num);
+  uint32_t exp = s21_bcd_exp_get(bcd_num);
+  if (s21_bcd_num_get(bcd_num, 0) != 0)
+    s21_bcd_exp_set(bcd_num, exp + 1);
+  else
+    s21_bcd_num_rshift(bcd_num);
+}
+
+// remove trailing zeroes
+void s21_bcd_shrink(s21_bcd *bcd_num) {
+  uint32_t exp = s21_bcd_exp_get(bcd_num);
+  while (exp != 0 && s21_bcd_num_get(bcd_num, 0) == 0) {
+    s21_bcd_num_rshift(bcd_num);
+    exp--;
+  }
+  s21_bcd_exp_set(bcd_num, exp);
+}
+
 bool s21_bcd_not_null(s21_bcd *bcd_num) {
   bool result = false;
-  for (size_t i = 0; !result && i < 7U; ++i)
-    if (bcd_num->bits[i] != 0U) result = true;
-  if ((bcd_num->bits[7] & 0xfff) != 0) result = true;
+  for (size_t n_index = 0U; !result && n_index < BCD_NUMSIZE; ++n_index)
+    result = s21_bcd_num_get(bcd_num, n_index) != 0;
   return result;
+}
+
+int s21_bcd_cmp(s21_bcd *bcd_1, s21_bcd *bcd_2) {
+  s21_bcd_normalize(bcd_1, bcd_2);
+  int result = 0;
+  int sign_1 = s21_bit_get(bcd_1->bits, BCD_BITSIZE - 1) != 0 ? -1 : 1;
+  int sign_2 = s21_bit_get(bcd_2->bits, BCD_BITSIZE - 1) != 0 ? -1 : 1;
+  for (size_t num_i = BCD_NUMSIZE; result == 0 && num_i > 0; --num_i) {
+    int num_1 = (int)s21_bcd_num_get(bcd_1, num_i - 1) * sign_1;
+    int num_2 = (int)s21_bcd_num_get(bcd_2, num_i - 1) * sign_2;
+    if (num_1 != num_2) result = num_1 > num_2 ? 1 : -1;
+  }
+  return result;
+}
+
+int s21_bcd_cmp_abs(const s21_bcd *bcd_1, const s21_bcd *bcd_2) {
+  s21_bcd abcd_1 = *bcd_1, abcd_2 = *bcd_2;
+  s21_bit_set(abcd_1.bits, BCD_BITSIZE - 1, 0);
+  s21_bit_set(abcd_2.bits, BCD_BITSIZE - 1, 0);
+  return s21_bcd_cmp(&abcd_1, &abcd_2);
+}
+
+int s21_bcd_add(s21_bcd *bcd_1, s21_bcd *bcd_2, s21_bcd *result) {
+  s21_bcd result_new = {0};
+  s21_bcd_exp_set(&result_new, s21_bcd_exp_get(bcd_1));
+  int remainder = 0, sign_remainder = 1;
+  int sign_1 = s21_bit_get(bcd_1->bits, BCD_BITSIZE - 1) ? -1 : 1;
+  int sign_2 = s21_bit_get(bcd_2->bits, BCD_BITSIZE - 1) ? -1 : 1;
+  if (sign_1 == -1) {
+    if (sign_2 == -1)
+      sign_1 = 1, sign_2 = 1;
+    else
+      sign_remainder = -1;
+    s21_bit_set(result_new.bits, BCD_BITSIZE - 1, 1);
+  }
+  for (size_t num_i = 0; num_i < BCD_NUMSIZE; ++num_i) {
+    int number_1 = s21_bcd_num_get(bcd_1, num_i);
+    int number_2 = s21_bcd_num_get(bcd_2, num_i);
+    int add = number_2 * sign_2 + remainder * sign_remainder;
+    remainder = 0;
+    if (abs(add) > number_1) {
+      add += sign_remainder == -1 ? -10 : (sign_2 == -1 ? 10 : 0);
+      remainder = sign_remainder == -1 || sign_2 == -1 ? -1 : 0;
+    }
+    add = abs(add + number_1 * sign_1);
+    if (add > 9) remainder = add / 10, add = add % 10;
+    s21_bcd_num_set(&result_new, num_i, add);
+  }
+  *result = result_new;
+  return remainder;
+}
+
+void s21_bcd_normalize(s21_bcd *value_1, s21_bcd *value_2) {
+  s21_bcd_shrink(value_1);
+  s21_bcd_shrink(value_2);
+  uint32_t exp_1 = s21_bcd_exp_get(value_1);
+  uint32_t exp_2 = s21_bcd_exp_get(value_2);
+
+  while (exp_1 > exp_2) {
+    s21_bcd_num_lshift(value_2);
+    exp_2++;
+  }
+  s21_bcd_exp_set(value_2, exp_2);
+  while (exp_1 < exp_2) {
+    s21_bcd_num_lshift(value_1);
+    exp_1++;
+  }
+  s21_bcd_exp_set(value_1, exp_1);
+}
+
+void s21_bcd_round_bank_limited(s21_bcd *bcd_num, int overflow) {
+  s21_bcd one = {0}, new_result = {0};
+  one.bits[0] |= 1;
+  if (s21_bcd_num_get(bcd_num, 0) % 2 == 0) {
+    if (s21_bcd_num_get(bcd_num, 0) > 5) {
+      s21_bcd_num_rshift(bcd_num);
+      s21_bcd_add(bcd_num, &one, &new_result);
+      *bcd_num = new_result;
+    } else {
+      s21_bcd_num_rshift(bcd_num);
+    }
+  } else {
+    if (s21_bcd_num_get(bcd_num, 0) > 4) {
+      s21_bcd_num_rshift(bcd_num);
+      s21_bcd_add(bcd_num, &one, &new_result);
+      *bcd_num = new_result;
+    } else {
+      s21_bcd_num_rshift(bcd_num);
+    }
+  }
+  s21_bcd_num_set(bcd_num, BCD_NUMSIZE - 1, overflow);
+  int32_t exp = s21_bcd_exp_get(bcd_num);
+  if (exp > 0) exp--;
+  s21_bcd_exp_set(bcd_num, exp);
 }
 
 // Conversion methods
@@ -144,6 +272,7 @@ mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm
 */
 
 void s21_dec2bcd(s21_decimal *number, s21_bcd *bcd) {
+  s21_bit_range_set(bcd->bits, 0, BCD_BITSIZE, 0);
   for (size_t i = 0; i < BCD_INTSIZE; ++i) bcd->bits[i] = 0;
   s21_decimal number_copy = *number;
   for (size_t shift = 0; shift < DEC_MANT_BITSIZE; shift++) {
@@ -158,31 +287,43 @@ void s21_dec2bcd(s21_decimal *number, s21_bcd *bcd) {
   }
   s21_bit_set(bcd->bits, 255U, s21_bit_get(number->bits, 127U));
   s21_bcd_exp_set(bcd, s21_decimal_exp_get(number));
+  s21_bcd_shrink(bcd);
 }
 
-int s21_bcd2dec(s21_bcd *bcd, s21_decimal *number) {
-  int error = 0;
-  s21_bcd bcd_copy = *bcd;
-  for (size_t shift = 0; shift < DEC_MANT_BITSIZE; ++shift) {
+int s21_bcd2dec(const s21_bcd *bcd, s21_decimal *number) {
+  int error = CALC_OK;
+  s21_bit_range_set(number->bits, 0, DEC_BITSIZE, 0);
+  s21_bcd bcd_cut = *bcd;
+  if (s21_bcd_not_null(&bcd_cut)) {
+    uint32_t exp = 0;
+    while ((exp = s21_bcd_exp_get(&bcd_cut)) > 28U)
+      s21_bcd_round_bank_limited(&bcd_cut, 0);
+    if (!s21_bcd_not_null(&bcd_cut)) error = CALC_ESMALL;
+  }
+  s21_bcd_shrink(&bcd_cut);
+  s21_bcd bcd_copy = bcd_cut;
+
+  for (size_t shift = 0; error == CALC_OK && shift < DEC_MANT_BITSIZE;
+       ++shift) {
     uint32_t remainder = 0;
-    for (int value_i = BCD_NUMSIZE - 1; value_i >= 0; --value_i) {
-      uint32_t value = s21_bcd_num_get(&bcd_copy, value_i);
-      s21_bcd_num_set(&bcd_copy, value_i, (value >> 1) + remainder * 5);
+    for (size_t value_i = BCD_NUMSIZE; value_i > 0; --value_i) {
+      uint32_t value = s21_bcd_num_get(&bcd_copy, value_i - 1);
+      s21_bcd_num_set(&bcd_copy, value_i - 1, (value >> 1) + remainder * 5);
       remainder = value & 1;
     }
     s21_bit_set(number->bits, shift, remainder);
   }
   if (s21_bcd_not_null(&bcd_copy)) {
-    if (s21_bcd_exp_get(bcd) == 0)
-      error = 1;
+    if (s21_bcd_exp_get(&bcd_cut) == 0)
+      error = CALC_ELARGE;
     else {
-      bcd_copy = *bcd;
+      bcd_copy = bcd_cut;
       s21_bcd_round_bank_limited(&bcd_copy, 0);
       error = s21_bcd2dec(&bcd_copy, number);
     }
   } else {
-    s21_bit_set(number->bits, 127U, s21_bit_get(bcd->bits, 255U));
-    s21_decimal_exp_set(number, s21_bcd_exp_get(bcd));
+    s21_bit_set(number->bits, 127U, s21_bit_get(bcd_cut.bits, 255U));
+    s21_decimal_exp_set(number, s21_bcd_exp_get(&bcd_cut));
   }
   return error;
 }
@@ -208,52 +349,29 @@ char *s21_bcd2str(s21_bcd *number) {
   for (int i = num_start; i >= exp; --i)
     *(result_cur++) = s21_bcd_num_get(number, i) + '0';
   *(result_cur++) = ',';
-  if (exp > 28) exp = 28;
   for (int i = exp - 1; i >= 0; --i)
     *(result_cur++) = s21_bcd_num_get(number, i) + '0';
   *result_cur = '\0';
   return result;
 }
 
-void s21_deciaml_bprint(s21_decimal *num) {
-  for (int i = DEC_BITSIZE - 1; i >= 0; --i) {
-    putchar(s21_bit_get(num->bits, i) ? '1' : '0');
-    if (i != 0 && i % 4 == 0) printf(i % 32 == 0 ? " | " : " ");
-  }
-  putchar('\n');
-}
+// void s21_decimal_bprint(s21_decimal *num) {
+//   for (int i = DEC_BITSIZE - 1; i >= 0; --i) {
+//     putchar(s21_bit_get(num->bits, i) ? '1' : '0');
+//     if (i != 0 && i % 4 == 0) printf(i % 32 == 0 ? " | " : " ");
+//   }
+//   putchar('\n');
+// }
 
-void s21_bcd_bprint(s21_bcd *num) {
-  for (int i = BCD_BITSIZE - 1; i >= 128; --i) {
-    putchar(s21_bit_get(num->bits, i) ? '1' : '0');
-    if (i != 128 && i % 4 == 0) printf(i % 32 == 0 ? " | " : " ");
-  }
-  putchar('\n');
-  for (int i = 127; i >= 0; --i) {
-    putchar(s21_bit_get(num->bits, i) ? '1' : '0');
-    if (i != 0 && i % 4 == 0) printf(i % 32 == 0 ? " | " : " ");
-  }
-  putchar('\n');
-}
-
-#ifndef TEST_RUN
-
-int main(void) {
-  s21_decimal num_1 = {0}, num_2 = {0}, res = {0};
-  s21_bcd bcd = {0};
-  s21_bit_set(num_1.bits, 31, 1);
-  s21_bit_set(num_1.bits, 32, 1);
-  s21_bit_set(num_2.bits, 60, 1);
-  s21_bit_set(num_2.bits, 127, 1);
-  s21_print_binary(&num_1);
-  s21_print_binary(&num_2);
-  s21_add(num_1, num_2, &res);
-  s21_print_binary(&res);
-  puts("");
-  s21_dec2bcd(&res, &bcd);
-  s21_print_binary(&bcd);
-  puts(s21_bcd2str(&bcd));
-  puts("-1152921498164396032,");
-}
-
-#endif
+// void s21_bcd_bprint(s21_bcd *num) {
+//   for (int i = BCD_BITSIZE - 1; i >= 128; --i) {
+//     putchar(s21_bit_get(num->bits, i) ? '1' : '0');
+//     if (i != 128 && i % 4 == 0) printf(i % 32 == 0 ? " | " : " ");
+//   }
+//   putchar('\n');
+//   for (int i = 127; i >= 0; --i) {
+//     putchar(s21_bit_get(num->bits, i) ? '1' : '0');
+//     if (i != 0 && i % 4 == 0) printf(i % 32 == 0 ? " | " : " ");
+//   }
+//   putchar('\n');
+// }
