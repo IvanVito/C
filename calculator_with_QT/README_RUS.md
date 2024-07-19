@@ -98,12 +98,14 @@
 <div align="center">
 
 ![credit_calculator](images/credit_calculator.png)
+
 *Кредитный калькулятор*
 </div>
 
 <div align="center">
 
 ![main_menu](images/graphic.png)
+
 *Меню построения графика*
 </div>
 
