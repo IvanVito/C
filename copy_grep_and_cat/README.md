@@ -1,4 +1,4 @@
-# Отчет о проделанной работе: Разработка утилит Bash Simple Bash Utils
+# Разработка утилит Bash Simple Bash Utils
 
 ## Введение
 
