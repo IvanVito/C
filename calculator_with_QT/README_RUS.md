@@ -91,19 +91,19 @@
 
 <div align="center">
 
-![main_menu](/Images/main.png)
+![main_menu](images/main.png)
 *Главное меню*
 </div>
 
 <div align="center">
 
-![credit_calculator](/Images/credit_calculator.png)
+![credit_calculator](images/credit_calculator.png)
 *Кредитный калькулятор*
 </div>
 
 <div align="center">
 
-![main_menu](/Images/graphic.png)
+![main_menu](images/graphic.png)
 *Меню построения графика*
 </div>
 
