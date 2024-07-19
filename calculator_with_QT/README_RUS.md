@@ -92,6 +92,7 @@
 <div align="center">
 
 ![main_menu](images/main.png)
+
 *Главное меню*
 </div>
 
