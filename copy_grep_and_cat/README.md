@@ -1,4 +1,4 @@
-# Разработка утилит Bash Simple Bash Utils
+# Разработка утилит Simple Bash Utils
 
 ## Введение
 
