@@ -35,7 +35,7 @@
 
 ---
 
-### 2. calculator_with_QT (SmartCalc v1.0)
+### 2. calculator_with_QT (SmartCalc)
 
 [Перейти к проекту](https://github.com/IvanVito/C/tree/main/calculator_with_QT)
 
