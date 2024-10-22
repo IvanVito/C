@@ -5,7 +5,7 @@
 ## Содержание
 
 1. [tetris (BrickGame)](#1-tetris-brickgame)
-2. [calculator_with_QT (SmartCalc v1.0)](#2-calculator_with_qt-smartcalc-v10)
+2. [calculator_with_QT (SmartCalc v1.0)](#2-calculator_with_qt-smartcalc)
 3. [matrix](#3-matrix)
 4. [decimal](#4-decimal)
 5. [copy_library_string](#5-copy_library_string)
