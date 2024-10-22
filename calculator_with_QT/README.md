@@ -1,7 +1,7 @@
-# SmartCalc v1.0
+# SmartCalc
 
 
-## Реализация SmartCalc v1.0
+## Реализация SmartCalc
 
 В данном проекте была реализована программа SmartCalc v1.0 (калькулятор):
 
