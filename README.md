@@ -116,7 +116,7 @@
 
 ---
 
-### 7. copy_grep_and_cat (Simple Bash Utils)
+### 7. copy_grep_and_cat (Разработка утилит cat и grep на С)
 
 [Перейти к проекту](https://github.com/IvanVito/C/tree/main/copy_grep_and_cat)
 
